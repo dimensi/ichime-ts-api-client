@@ -9,5 +9,6 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       exclude: ["node_modules/", "dist/", "tests/", "*.config.ts", "*.config.js"],
     },
+    setupFiles: ["dotenv/config"],
   },
 });

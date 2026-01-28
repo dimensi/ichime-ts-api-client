@@ -1,9 +1,10 @@
-export interface Titles {
-  ru?: string | null;
-  romaji?: string | null;
-}
+import type { Episode } from "./episode.js";
+import type { SeriesType } from "./series-type.js";
 
-export type SeriesType = "tv" | "movie" | "ova" | "ona" | "special" | "music";
+export interface Titles {
+  ru: string | null;
+  romaji: string | null;
+}
 
 export interface Series {
   id: number;
@@ -14,6 +15,16 @@ export interface Series {
   season: string;
   type: SeriesType | null;
   year: number | null;
+}
+
+export interface SeriesFullGenre {
+  id: number;
+  title: string;
+}
+
+export interface SeriesFullDescription {
+  source: string;
+  value: string;
 }
 
 export interface SeriesFull {
@@ -27,13 +38,7 @@ export interface SeriesFull {
   season: string;
   type: SeriesType | null;
   titles: Titles;
-  genres?: Array<{
-    id: number;
-    title: string;
-  }> | null;
-  descriptions?: Array<{
-    source: string;
-    value: string;
-  }> | null;
-  episodes?: Array<unknown> | null;
+  genres: SeriesFullGenre[] | null;
+  descriptions: SeriesFullDescription[] | null;
+  episodes: Episode[] | null;
 }
