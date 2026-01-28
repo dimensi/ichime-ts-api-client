@@ -1,14 +1,14 @@
 {
   "name": "ichime-ts-api-client",
   "version": "1.0.3",
-  "description": "TypeScript API client for smotret-anime.com",
+  "description": "TypeScript API client for anime365",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     }
   },
   "engines": {
