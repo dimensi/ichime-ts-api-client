@@ -21,7 +21,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublish": "pnpm build"
   },
   "keywords": [
     "anime",
@@ -43,7 +44,6 @@
     "cheerio": "^1.2.0",
     "domhandler": "5.0.3",
     "dotenv": "^17.2.3",
-    "tough-cookie": "^6.0.0",
-    "undici": "^7.19.2"
+    "tough-cookie": "^6.0.0"
   }
 }

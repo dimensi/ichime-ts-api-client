@@ -1,10 +1,6 @@
 import { CookieJar } from "tough-cookie";
-import {
-  type RequestInit as UndiciRequestInit,
-  fetch as undiciFetch,
-} from "undici";
 
-export interface RequestOptions extends Omit<UndiciRequestInit, "dispatcher"> {
+export interface RequestOptions extends Omit<RequestInit, "dispatcher"> {
   timeout?: number;
 }
 
@@ -42,7 +38,7 @@ export class HttpSession {
           ...init.headers,
         };
 
-        const response = await undiciFetch(url, {
+        const response = await fetch(url, {
           ...init,
           headers,
           signal: controller.signal,

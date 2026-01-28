@@ -39,3 +39,8 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+
+Sources/
+Package.resolved
+Package.swift
