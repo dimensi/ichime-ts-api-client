@@ -14,6 +14,10 @@
   "engines": {
     "node": ">=24.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimensi/ichime-ts-api-client"
+  },
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
