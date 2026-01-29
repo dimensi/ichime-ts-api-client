@@ -28,8 +28,19 @@ import {
 const COOKIE_NAME_CSRF = "csrf";
 const FORM_DATA_FIELD_CSRF = "csrf";
 
+export interface WebClientConfig {
+  debug?: boolean;
+}
+
 export class WebClient {
-  constructor(private readonly session: HttpSession) {}
+  private readonly debug: boolean;
+
+  constructor(
+    private readonly session: HttpSession,
+    config: WebClientConfig = {},
+  ) {
+    this.debug = config.debug ?? false;
+  }
 
   get baseUrl(): string {
     return this.session.baseUrl;
@@ -55,19 +66,32 @@ export class WebClient {
         method: "GET",
       });
     } catch (error) {
+      if (this.debug) {
+        console.debug(`[WebClient] Request failed: GET ${url.toString()}`, error);
+      }
       throw WebClientError.unknownError(
         error instanceof Error ? error : new Error(String(error)),
       );
     }
 
+    if (this.debug) {
+      console.debug(`[WebClient] Web request: GET ${url.toString()} [${response.status}]`);
+    }
+
     if (response.status >= 400) {
+      if (this.debug) {
+        console.debug(`[WebClient] Bad status code: ${response.status}`);
+      }
       throw WebClientError.badStatusCode(response.status);
     }
 
     let html: string;
     try {
       html = await response.text();
-    } catch {
+    } catch (error) {
+      if (this.debug) {
+        console.debug(`[WebClient] Could not convert response data to string`, error);
+      }
       throw WebClientError.couldNotConvertResponseDataToString();
     }
 
@@ -115,19 +139,33 @@ export class WebClient {
         body,
       });
     } catch (error) {
+      if (this.debug) {
+        console.debug(`[WebClient] Request failed: POST ${url.toString()}`, error);
+      }
       throw WebClientError.unknownError(
         error instanceof Error ? error : new Error(String(error)),
       );
     }
 
+    if (this.debug) {
+      console.debug(`[WebClient] Web request: POST ${url.toString()} [${response.status}]`);
+    }
+
     if (response.status >= 400) {
+      if (this.debug) {
+        console.debug(`[WebClient] Bad status code: ${response.status}`);
+        console.debug(`[WebClient] Form data: ${JSON.stringify(formDataWithCsrf)}`);
+      }
       throw WebClientError.badStatusCode(response.status);
     }
 
     let html: string;
     try {
       html = await response.text();
-    } catch {
+    } catch (error) {
+      if (this.debug) {
+        console.debug(`[WebClient] Could not convert response data to string`, error);
+      }
       throw WebClientError.couldNotConvertResponseDataToString();
     }
 

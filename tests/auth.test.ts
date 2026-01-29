@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HttpSession, WebClient } from "../src/index.js";
 
-const BASE_URL = process.env.ANIME365_BASE_URL || "https://smotret-anime.com";
+const BASE_URL = process.env.ANIME365_BASE_URL || "https://smotret-anime.org";
 const USERNAME = process.env.ANIME365_USERNAME as string | undefined;
 const PASSWORD = process.env.ANIME365_PASSWORD as string | undefined;
 

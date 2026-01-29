@@ -35,8 +35,19 @@ export interface ListEpisodesOptions {
   offset?: number;
 }
 
+export interface ApiClientConfig {
+  debug?: boolean;
+}
+
 export class ApiClient {
-  constructor(private readonly session: HttpSession) {}
+  private readonly debug: boolean;
+
+  constructor(
+    private readonly session: HttpSession,
+    config: ApiClientConfig = {},
+  ) {
+    this.debug = config.debug ?? false;
+  }
 
   async sendRequest<T>(endpoint: string, queryItems: Record<string, string> = {}): Promise<T> {
     const url = new URL(`/api${endpoint}`, this.session.baseUrl);
@@ -56,19 +67,37 @@ export class ApiClient {
         },
       });
     } catch (error) {
+      if (this.debug) {
+        console.debug(`[ApiClient] Request failed: GET ${url.toString()}`, error);
+      }
       throw ApiClientError.requestFailed(error instanceof Error ? error : undefined);
     }
 
+    if (this.debug) {
+      console.debug(`[ApiClient] API request: GET ${url.toString()} [${response.status}]`);
+    }
+
     let data: unknown;
+    let responseText: string | undefined;
     try {
-      data = await response.json();
+      responseText = await response.text();
+      data = JSON.parse(responseText);
     } catch (error) {
+      if (this.debug) {
+        console.error(
+          `[ApiClient] Decoding JSON error:\n\n${error}\n\nAPI response:\n\n${responseText ?? "(no response text)"}`,
+        );
+      }
       throw ApiClientError.canNotDecodeResponseJson(error instanceof Error ? error : undefined);
     }
 
     // Проверяем на ошибку API
     if (this.isApiErrorResponse(data)) {
       const apiError = data.error;
+
+      if (this.debug) {
+        console.warn(`[ApiClient] API error:\n\n${responseText}`);
+      }
 
       if (apiError.code === 403) {
         throw ApiClientError.apiError(ApiError.authenticationRequired());
@@ -84,6 +113,12 @@ export class ApiClient {
     // Успешный ответ
     if (this.isApiSuccessfulResponse<T>(data)) {
       return transformDatesInResponse<T>(data.data);
+    }
+
+    if (this.debug) {
+      console.error(
+        `[ApiClient] Could not decode response as ApiSuccessfulResponse:\n\n${responseText}`,
+      );
     }
 
     throw ApiClientError.canNotDecodeResponseJson();
