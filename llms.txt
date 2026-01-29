@@ -1,0 +1,880 @@
+# ichime-ts-api-client
+
+TypeScript API клиент для работы с сайтом anime365 (smotret-anime.com).
+
+## Глоссарий
+
+| Термин | Описание |
+|--------|----------|
+| **anime365** | Сайт для просмотра аниме (smotret-anime.com) |
+| **Series** | Аниме-сериал (тайтл) |
+| **Episode** | Эпизод (серия) аниме |
+| **Translation** | Перевод/озвучка эпизода |
+| **Embed** | Данные для встраивания видеоплеера |
+| **Moment** | Короткий видео-клип (фрагмент) из аниме |
+| **AnimeList** | Список аниме пользователя с категориями просмотра |
+| **HttpSession** | Класс для HTTP-запросов с управлением cookies |
+| **ApiClient** | Клиент для публичного JSON API (не требует авторизации) |
+| **WebClient** | Клиент для веб-скрапинга HTML (требует авторизации) |
+| **MAL** | MyAnimeList — популярная база данных аниме |
+| **CSRF** | Cross-Site Request Forgery — токен защиты форм |
+
+## Архитектура
+
+**Summary:** Библиотека состоит из трёх слоёв: HttpSession (транспорт), ApiClient (JSON API), WebClient (HTML парсинг).
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Ваше приложение                    │
+├─────────────────────────────────────────────────────┤
+│    ApiClient (JSON API)    │    WebClient (HTML)    │
+├─────────────────────────────────────────────────────┤
+│                    HttpSession                       │
+│            (HTTP + Cookie Management)                │
+└─────────────────────────────────────────────────────┘
+```
+
+- **HttpSession** — базовый HTTP-клиент с автоматическим управлением cookies и редиректами
+- **ApiClient** — работа с публичным REST API (`/api/*`), возвращает типизированные объекты
+- **WebClient** — парсинг HTML-страниц через cheerio, требует авторизации для большинства методов
+
+## Установка
+
+**Summary:** Установка через pnpm, npm или yarn. Требует Node.js >= 24.0.0.
+
+### Вопрос: Как установить библиотеку?
+
+```bash
+# pnpm (рекомендуется)
+pnpm add ichime-ts-api-client
+
+# npm
+npm install ichime-ts-api-client
+
+# yarn
+yarn add ichime-ts-api-client
+```
+
+### Вопрос: Какие системные требования?
+
+- Node.js версии 24.0.0 или выше
+- ESM-модули (type: "module" в package.json)
+
+## Быстрый старт
+
+**Summary:** Минимальный пример использования ApiClient и WebClient.
+
+### Вопрос: Как начать работу с библиотекой?
+
+```typescript
+// Импортируем необходимые классы
+import { HttpSession, ApiClient, WebClient } from "ichime-ts-api-client";
+
+// Шаг 1: Создаём HTTP-сессию (общая для всех клиентов)
+const session = new HttpSession("https://smotret-anime.com");
+
+// Шаг 2a: Используем публичный API (без авторизации)
+const apiClient = new ApiClient(session);
+const series = await apiClient.listSeries({ query: "naruto" });
+console.log(series); // Массив найденных сериалов
+
+// Шаг 2b: Или используем WebClient (требует авторизации)
+const webClient = new WebClient(session);
+await webClient.login("user@example.com", "password123");
+const profile = await webClient.getProfile();
+console.log(profile); // { id: 12345, name: "Username", avatarUrl: "..." }
+```
+
+## HttpSession
+
+**Summary:** Базовый класс для HTTP-запросов с управлением cookies, таймаутами и редиректами.
+
+### Вопрос: Как создать HTTP-сессию?
+
+```typescript
+import { HttpSession } from "ichime-ts-api-client";
+
+// Создание сессии с базовым URL
+const session = new HttpSession("https://smotret-anime.com");
+```
+
+### Вопрос: Как выполнить HTTP-запрос?
+
+```typescript
+import { HttpSession } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+
+// GET-запрос с кастомным таймаутом (по умолчанию 10000 мс)
+const response = await session.request("/api/series", {
+  method: "GET",
+  timeout: 15000, // 15 секунд
+});
+
+// POST-запрос с телом
+const postResponse = await session.request("/api/endpoint", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ key: "value" }),
+});
+```
+
+### Вопрос: Как работать с cookies?
+
+```typescript
+import { HttpSession } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+
+// Установить cookie
+await session.setCookie("name", "value");
+
+// Получить значение cookie по имени
+const value = await session.getCookie("name");
+console.log(value); // "value" или undefined
+
+// Получить все cookies как строку для заголовка
+const cookieString = await session.getCookieString();
+console.log(cookieString); // "name=value; other=data"
+```
+
+### Интерфейс RequestOptions
+
+```typescript
+interface RequestOptions extends Omit<RequestInit, "dispatcher"> {
+  timeout?: number; // Таймаут в миллисекундах (по умолчанию 10000)
+}
+```
+
+## ApiClient
+
+**Summary:** Клиент для публичного JSON API. Не требует авторизации. Автоматически парсит даты и обрабатывает ошибки.
+
+### Вопрос: Как создать ApiClient?
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+```
+
+### Методы ApiClient
+
+#### listSeries — Поиск сериалов
+
+**Summary:** Поиск аниме по названию, фильтрам или MyAnimeList ID.
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+import type { ListSeriesOptions, Series } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+// Поиск по названию
+const seriesByName: Series[] = await client.listSeries({
+  query: "attack on titan",
+  limit: 20,
+  offset: 0,
+});
+
+// Поиск по MyAnimeList ID
+const seriesByMal: Series[] = await client.listSeries({
+  myAnimeListId: 16498,
+});
+
+// Поиск с фильтрами (chips)
+const seriesFiltered: Series[] = await client.listSeries({
+  chips: {
+    genre: "action",
+    year: "2024",
+  },
+});
+```
+
+**Параметры ListSeriesOptions:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| query | string | Поисковый запрос (название аниме) |
+| limit | number | Максимальное количество результатов |
+| offset | number | Смещение для пагинации |
+| chips | Record<string, string> | Фильтры в формате ключ-значение |
+| myAnimeListId | number | ID из базы MyAnimeList |
+
+#### getSeries — Получение информации о сериале
+
+**Summary:** Получение полной информации о конкретном аниме по его ID.
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+import type { SeriesFull } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+const series: SeriesFull = await client.getSeries(12345);
+
+console.log(series.titles);       // Названия на разных языках
+console.log(series.descriptions); // Описания
+console.log(series.genres);       // Жанры
+```
+
+#### listEpisodes — Список эпизодов
+
+**Summary:** Получение списка эпизодов для указанного сериала.
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+import type { Episode, ListEpisodesOptions } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+const episodes: Episode[] = await client.listEpisodes({
+  seriesId: 12345,
+  limit: 50,
+  offset: 0,
+});
+
+for (const episode of episodes) {
+  console.log(episode.id, episode.episodeInt);
+}
+```
+
+**Параметры ListEpisodesOptions:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| seriesId | number | ID сериала |
+| limit | number | Максимальное количество результатов |
+| offset | number | Смещение для пагинации |
+
+#### getEpisode — Информация об эпизоде
+
+**Summary:** Получение полной информации об эпизоде, включая список переводов.
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+import type { EpisodeFull } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+const episode: EpisodeFull = await client.getEpisode(67890);
+
+console.log(episode.translations); // Массив доступных переводов
+```
+
+#### getTranslation — Информация о переводе
+
+**Summary:** Получение метаданных перевода (автор, качество).
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+import type { TranslationFull } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+const translation: TranslationFull = await client.getTranslation(111222);
+
+console.log(translation.authorsSummary);  // "AniLibria"
+console.log(translation.qualitySummary);  // "1080p"
+```
+
+#### getTranslationEmbed — Данные для воспроизведения
+
+**Summary:** Получение URL видеопотоков для плеера.
+
+```typescript
+import { HttpSession, ApiClient } from "ichime-ts-api-client";
+import type { TranslationEmbed } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+const embed: TranslationEmbed = await client.getTranslationEmbed(111222);
+
+console.log(embed.stream); // Информация о видеопотоках
+```
+
+## WebClient
+
+**Summary:** Клиент для веб-скрапинга HTML-страниц. Требует авторизации для большинства методов. Использует cheerio для парсинга.
+
+### Вопрос: Как создать WebClient?
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+```
+
+### Авторизация
+
+#### login — Вход в аккаунт
+
+**Summary:** Авторизация на сайте по email и паролю.
+
+```typescript
+import { HttpSession, WebClient, WebClientError } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+try {
+  await client.login("user@example.com", "password123");
+  console.log("Авторизация успешна");
+} catch (error) {
+  if (error instanceof WebClientError) {
+    console.error("Ошибка авторизации:", error.message);
+  }
+}
+```
+
+### Профиль пользователя
+
+#### getProfile — Получение профиля
+
+**Summary:** Получение данных профиля авторизованного пользователя.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { Profile } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const profile: Profile = await client.getProfile();
+
+console.log(profile.id);        // 12345
+console.log(profile.name);      // "Username"
+console.log(profile.avatarUrl); // "https://..."
+```
+
+### Лента эпизодов
+
+#### getPersonalEpisodes — Персональная лента
+
+**Summary:** Получение новых эпизодов из списка отслеживаемых аниме пользователя.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { NewPersonalEpisode } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+// Получить первую страницу персональной ленты
+const episodes: NewPersonalEpisode[] = await client.getPersonalEpisodes(1);
+
+for (const ep of episodes) {
+  console.log(ep.seriesTitleRu);      // "Атака титанов"
+  console.log(ep.episodeNumberLabel); // "Серия 25"
+  console.log(ep.episodeUpdateType);  // "новый перевод"
+  console.log(ep.seriesId);           // 12345
+  console.log(ep.episodeId);          // 67890
+}
+```
+
+#### getRecentEpisodes — Общая лента
+
+**Summary:** Получение недавно вышедших эпизодов (без фильтрации по списку).
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { NewRecentEpisode } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const episodes: NewRecentEpisode[] = await client.getRecentEpisodes(1);
+
+for (const ep of episodes) {
+  console.log(ep.seriesTitleRu);      // "Наруто"
+  console.log(ep.episodeNumberLabel); // "Серия 100"
+  console.log(ep.episodeUploadedAt);  // Date object
+}
+```
+
+#### markEpisodeAsWatched — Отметить просмотренным
+
+**Summary:** Отметка эпизода как просмотренного.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+// translationId — ID конкретного перевода эпизода
+await client.markEpisodeAsWatched(111222);
+```
+
+### Список аниме пользователя (AnimeList)
+
+#### getAnimeList — Получение списка
+
+**Summary:** Получение списка аниме пользователя по категории.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { AnimeListCategory, AnimeListEntry } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const userId = 12345; // ID пользователя из профиля
+
+// Доступные категории: "watching", "completed", "onHold", "dropped", "planToWatch"
+const watching: AnimeListEntry[] = await client.getAnimeList(userId, "watching");
+const completed: AnimeListEntry[] = await client.getAnimeList(userId, "completed");
+const onHold: AnimeListEntry[] = await client.getAnimeList(userId, "onHold");
+const dropped: AnimeListEntry[] = await client.getAnimeList(userId, "dropped");
+const planToWatch: AnimeListEntry[] = await client.getAnimeList(userId, "planToWatch");
+
+for (const entry of watching) {
+  console.log(entry.seriesId);        // 12345
+  console.log(entry.seriesTitleFull); // "Атака титанов / Shingeki no Kyojin"
+  console.log(entry.episodesWatched); // 10
+  console.log(entry.episodesTotal);   // 25 или null
+  console.log(entry.score);           // 8 или null
+}
+```
+
+**Категории AnimeListCategory:**
+
+| Категория | Описание |
+|-----------|----------|
+| watching | Смотрю |
+| completed | Просмотрено |
+| onHold | Отложено |
+| dropped | Брошено |
+| planToWatch | Запланировано |
+
+#### getAnimeListEditableEntry — Редактируемая запись
+
+**Summary:** Получение текущего состояния записи в списке для редактирования.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { AnimeListEditableEntry } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const entry: AnimeListEditableEntry = await client.getAnimeListEditableEntry(12345);
+
+console.log(entry.status);          // "watching" | "completed" | "onHold" | "dropped" | "planToWatch" | "notInList"
+console.log(entry.episodesWatched); // 10
+console.log(entry.score);           // 8 или null
+console.log(entry.commentary);      // "Отличное аниме!" или null
+```
+
+#### editAnimeListEntry — Редактирование записи
+
+**Summary:** Изменение статуса, оценки, количества просмотренных эпизодов и комментария.
+
+```typescript
+import { HttpSession, WebClient, AnimeListEntryStatusNumericId } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+await client.editAnimeListEntry(
+  12345,                                    // seriesId
+  8,                                        // score (1-10)
+  5,                                        // episodesWatched
+  AnimeListEntryStatusNumericId.watching,   // status (числовой ID)
+  "Отличное аниме!"                         // comment
+);
+```
+
+**Значения AnimeListEntryStatusNumericId:**
+
+| Константа | Значение | Описание |
+|-----------|----------|----------|
+| AnimeListEntryStatusNumericId.watching | 1 | Смотрю |
+| AnimeListEntryStatusNumericId.completed | 2 | Просмотрено |
+| AnimeListEntryStatusNumericId.onHold | 3 | Отложено |
+| AnimeListEntryStatusNumericId.dropped | 4 | Брошено |
+| AnimeListEntryStatusNumericId.planToWatch | 5 | Запланировано |
+
+### Моменты (видео-клипы)
+
+#### getMoments — Список моментов
+
+**Summary:** Получение списка коротких видео-клипов с сортировкой.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { MomentPreview, MomentSorting } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+// Сортировка: "popular" | "recent" | undefined
+const moments: MomentPreview[] = await client.getMoments(1, "popular");
+
+for (const moment of moments) {
+  console.log(moment.momentId);          // 99999
+  console.log(moment.momentTitle);       // "Эпичный момент"
+  console.log(moment.sourceDescription); // "Атака титанов, серия 25"
+  console.log(moment.coverUrl);          // "https://..."
+  console.log(moment.durationSeconds);   // 30
+}
+```
+
+#### getMomentsBySeries — Моменты сериала
+
+**Summary:** Получение моментов для конкретного аниме.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { MomentPreview } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const moments: MomentPreview[] = await client.getMomentsBySeries(12345, 1);
+```
+
+#### getMomentDetails — Детали момента
+
+**Summary:** Получение связей момента с сериалом и эпизодом.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { MomentDetails } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const details: MomentDetails = await client.getMomentDetails(99999);
+
+console.log(details.seriesId);    // 12345
+console.log(details.seriesTitle); // "Атака титанов"
+console.log(details.episodeId);   // 67890
+```
+
+#### getMomentEmbed — URL видео момента
+
+**Summary:** Получение прямой ссылки на видео момента.
+
+```typescript
+import { HttpSession, WebClient } from "ichime-ts-api-client";
+import type { MomentEmbed } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+await client.login("user@example.com", "password123");
+
+const embed: MomentEmbed = await client.getMomentEmbed(99999);
+
+console.log(embed.videoUrl); // "https://video.smotret-anime.com/..."
+```
+
+## Типы данных
+
+**Summary:** Все экспортируемые TypeScript типы для работы с API.
+
+### API типы (ApiClient)
+
+```typescript
+import type {
+  // Сериалы
+  Series,              // Краткая информация о сериале
+  SeriesFull,          // Полная информация о сериале
+  SeriesFullDescription, // Описание сериала
+  SeriesFullGenre,     // Жанр сериала
+  SeriesType,          // Тип (TV, OVA, Movie и т.д.)
+  Titles,              // Названия на разных языках
+
+  // Эпизоды
+  Episode,             // Краткая информация об эпизоде
+  EpisodeFull,         // Полная информация с переводами
+
+  // Переводы
+  Translation,         // Краткая информация о переводе
+  TranslationFull,     // Полная информация о переводе
+  TranslationEmbed,    // Данные для воспроизведения
+  TranslationEmbedStream, // Информация о видеопотоке
+
+  // Опции запросов
+  ListSeriesOptions,   // Параметры поиска сериалов
+  ListEpisodesOptions, // Параметры получения эпизодов
+} from "ichime-ts-api-client";
+```
+
+### Web типы (WebClient)
+
+```typescript
+import type {
+  // Профиль
+  Profile,             // Профиль пользователя
+
+  // Эпизоды
+  NewPersonalEpisode,  // Эпизод из персональной ленты
+  NewRecentEpisode,    // Эпизод из общей ленты
+
+  // Список аниме
+  AnimeListCategory,   // Категория списка ("watching" | "completed" | ...)
+  AnimeListEntry,      // Запись в списке
+  AnimeListEditableEntry, // Редактируемая запись
+  AnimeListEntryStatus, // Статус записи
+  EditAnimeListResult, // Результат редактирования
+
+  // Моменты
+  MomentPreview,       // Превью момента
+  MomentDetails,       // Детали момента
+  MomentEmbed,         // URL видео момента
+  MomentSorting,       // Сортировка ("popular" | "recent")
+  VideoSource,         // Источник видео
+} from "ichime-ts-api-client";
+```
+
+### Утилиты для типов
+
+```typescript
+import {
+  // Числовые ID категорий
+  AnimeListCategoryNumericId,
+  AnimeListCategoryWebPath,
+  AnimeListEntryStatusNumericId,
+
+  // Конвертеры
+  animeListCategoryFromNumericId,    // number -> AnimeListCategory
+  animeListEntryStatusFromNumericId, // number -> AnimeListEntryStatus
+} from "ichime-ts-api-client";
+```
+
+## Вспомогательные функции
+
+**Summary:** Утилиты для парсинга дат, длительности и URL.
+
+### parseApiDate — Парсинг даты из API
+
+```typescript
+import { parseApiDate } from "ichime-ts-api-client";
+
+// Преобразует строку даты из API в объект Date
+const date: Date = parseApiDate("2024-01-15 12:30:00");
+console.log(date); // 2024-01-15T12:30:00.000Z
+```
+
+### isEmptyDate — Проверка пустой даты
+
+```typescript
+import { isEmptyDate } from "ichime-ts-api-client";
+
+// API возвращает "0000-00-00 00:00:00" для пустых дат
+const isEmpty: boolean = isEmptyDate("0000-00-00 00:00:00"); // true
+const isValid: boolean = isEmptyDate("2024-01-15 12:30:00"); // false
+```
+
+### parseWebDate — Парсинг даты из HTML
+
+```typescript
+import { parseWebDate } from "ichime-ts-api-client";
+
+// Преобразует русскоязычную дату со страницы в объект Date
+const date: Date | null = parseWebDate("15 января 12:30");
+```
+
+### parseDurationString — Парсинг длительности
+
+```typescript
+import { parseDurationString } from "ichime-ts-api-client";
+
+// Преобразует строку "MM:SS" в секунды
+const seconds: number | null = parseDurationString("1:30"); // 90
+const seconds2: number | null = parseDurationString("10:05"); // 605
+```
+
+### extractIdentifiersFromUrl — Извлечение ID из URL
+
+```typescript
+import { extractIdentifiersFromUrl } from "ichime-ts-api-client";
+
+const url = new URL("https://smotret-anime.com/catalog/1234-naruto/5678-episode-1");
+const { seriesId, episodeId } = extractIdentifiersFromUrl(url);
+
+console.log(seriesId);  // 1234
+console.log(episodeId); // 5678
+```
+
+## Обработка ошибок
+
+**Summary:** Библиотека выбрасывает типизированные ошибки для разных ситуаций.
+
+### Классы ошибок
+
+| Класс | Источник | Описание |
+|-------|----------|----------|
+| ApiError | ApiClient | Ошибка от сервера API (403, 404, etc.) |
+| ApiClientError | ApiClient | Ошибка клиента (сеть, парсинг JSON) |
+| WebClientError | WebClient | Ошибка веб-клиента (парсинг HTML, авторизация) |
+| WebClientTypeNormalizationError | WebClient | Ошибка нормализации типов из HTML |
+
+### Вопрос: Как обрабатывать ошибки ApiClient?
+
+```typescript
+import { HttpSession, ApiClient, ApiClientError, ApiError } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new ApiClient(session);
+
+try {
+  await client.getSeries(99999999);
+} catch (error) {
+  if (error instanceof ApiClientError) {
+    console.error("Ошибка клиента:", error.message);
+
+    // Проверяем причину ошибки
+    if (error.cause instanceof ApiError) {
+      console.error("Код ошибки API:", error.cause.code);
+      // 403 — требуется авторизация
+      // 404 — не найдено
+    }
+  }
+}
+```
+
+### Вопрос: Как обрабатывать ошибки WebClient?
+
+```typescript
+import { HttpSession, WebClient, WebClientError } from "ichime-ts-api-client";
+
+const session = new HttpSession("https://smotret-anime.com");
+const client = new WebClient(session);
+
+try {
+  await client.getProfile();
+} catch (error) {
+  if (error instanceof WebClientError) {
+    console.error("Ошибка веб-клиента:", error.message);
+
+    // Типичные сообщения:
+    // - "Authentication required" — нужна авторизация
+    // - "Bad status code: 404" — страница не найдена
+    // - "Could not parse HTML" — ошибка парсинга
+  }
+}
+```
+
+### Полный пример с обработкой ошибок
+
+```typescript
+import {
+  HttpSession,
+  ApiClient,
+  WebClient,
+  ApiClientError,
+  ApiError,
+  WebClientError,
+} from "ichime-ts-api-client";
+
+async function fetchAnimeData(seriesId: number) {
+  const session = new HttpSession("https://smotret-anime.com");
+  const apiClient = new ApiClient(session);
+  const webClient = new WebClient(session);
+
+  try {
+    // Публичный API — не требует авторизации
+    const series = await apiClient.getSeries(seriesId);
+    console.log("Сериал:", series.titles);
+
+    // WebClient — требует авторизации
+    await webClient.login("user@example.com", "password123");
+    const entry = await webClient.getAnimeListEditableEntry(seriesId);
+    console.log("Статус в списке:", entry.status);
+
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.cause instanceof ApiError && error.cause.code === 404) {
+        console.error("Сериал не найден");
+      } else {
+        console.error("Ошибка API:", error.message);
+      }
+    } else if (error instanceof WebClientError) {
+      if (error.message === "Authentication required") {
+        console.error("Неверные учётные данные");
+      } else {
+        console.error("Ошибка веб-клиента:", error.message);
+      }
+    } else {
+      throw error;
+    }
+  }
+}
+
+// Использование
+fetchAnimeData(12345);
+```
+
+## Разработка
+
+**Summary:** Инструкции для контрибьюторов.
+
+### Вопрос: Как настроить окружение для разработки?
+
+```bash
+# Клонировать репозиторий
+git clone https://github.com/dimensi/ichime-ts-api-client.git
+cd ichime-ts-api-client
+
+# Установить зависимости
+pnpm install
+```
+
+### Вопрос: Какие команды доступны?
+
+| Команда | Описание |
+|---------|----------|
+| `pnpm build` | Сборка проекта (tsdown) |
+| `pnpm test` | Запуск тестов (vitest) |
+| `pnpm test:coverage` | Тесты с покрытием |
+| `pnpm lint` | Проверка линтером (biome) |
+| `pnpm lint:fix` | Автоисправление линтером |
+| `pnpm format` | Форматирование кода |
+| `pnpm typecheck` | Проверка типов TypeScript |
+
+### Технологический стек
+
+- **Runtime:** Node.js >= 24.0.0
+- **Package Manager:** pnpm
+- **Bundler:** tsdown
+- **Test Runner:** vitest
+- **Linter/Formatter:** biome
+- **HTML Parser:** cheerio
+- **Cookie Management:** tough-cookie
+
+## Лицензия
+
+MIT
