@@ -44,7 +44,7 @@ export class ApiClient {
 
   constructor(
     private readonly session: HttpSession,
-    config: ApiClientConfig = {},
+    config: ApiClientConfig = {}
   ) {
     this.debug = config.debug ?? false;
   }
@@ -85,7 +85,7 @@ export class ApiClient {
     } catch (error) {
       if (this.debug) {
         console.error(
-          `[ApiClient] Decoding JSON error:\n\n${error}\n\nAPI response:\n\n${responseText ?? "(no response text)"}`,
+          `[ApiClient] Decoding JSON error:\n\n${error}\n\nAPI response:\n\n${responseText ?? "(no response text)"}`
         );
       }
       throw ApiClientError.canNotDecodeResponseJson(error instanceof Error ? error : undefined);
@@ -117,7 +117,7 @@ export class ApiClient {
 
     if (this.debug) {
       console.error(
-        `[ApiClient] Could not decode response as ApiSuccessfulResponse:\n\n${responseText}`,
+        `[ApiClient] Could not decode response as ApiSuccessfulResponse:\n\n${responseText}`
       );
     }
 

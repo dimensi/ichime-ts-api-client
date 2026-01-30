@@ -91,9 +91,6 @@ export class HttpSession {
 
   async setCookie(name: string, value: string): Promise<void> {
     const url = new URL(this.baseUrl);
-    await this.jar.setCookie(
-      `${name}=${value}; Domain=${url.hostname}; Path=/`,
-      this.baseUrl,
-    );
+    await this.jar.setCookie(`${name}=${value}; Domain=${url.hostname}; Path=/`, this.baseUrl);
   }
 }

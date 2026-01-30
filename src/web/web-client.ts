@@ -2,11 +2,7 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import type { HttpSession } from "../http-session.js";
 import { WebClientError } from "./errors.js";
-import {
-  extractIdentifiersFromUrl,
-  parseDurationString,
-  parseWebDate,
-} from "./helpers.js";
+import { extractIdentifiersFromUrl, parseDurationString, parseWebDate } from "./helpers.js";
 import type {
   AnimeListCategory,
   AnimeListEditableEntry,
@@ -20,10 +16,7 @@ import type {
   Profile,
   VideoSource,
 } from "./types/index.js";
-import {
-  AnimeListCategoryWebPath,
-  animeListEntryStatusFromNumericId,
-} from "./types/index.js";
+import { AnimeListCategoryWebPath, animeListEntryStatusFromNumericId } from "./types/index.js";
 
 const COOKIE_NAME_CSRF = "csrf";
 const FORM_DATA_FIELD_CSRF = "csrf";
@@ -37,7 +30,7 @@ export class WebClient {
 
   constructor(
     private readonly session: HttpSession,
-    config: WebClientConfig = {},
+    config: WebClientConfig = {}
   ) {
     this.debug = config.debug ?? false;
   }
@@ -46,16 +39,11 @@ export class WebClient {
     return this.session.baseUrl;
   }
 
-  async sendRequest(
-    path: string,
-    queryItems: Record<string, string> = {},
-  ): Promise<string> {
+  async sendRequest(path: string, queryItems: Record<string, string> = {}): Promise<string> {
     const url = new URL(path, this.session.baseUrl);
 
     // Сортируем параметры по имени (как в Swift)
-    const sortedParams = Object.entries(queryItems).sort(([a], [b]) =>
-      a.localeCompare(b),
-    );
+    const sortedParams = Object.entries(queryItems).sort(([a], [b]) => a.localeCompare(b));
     for (const [key, value] of sortedParams) {
       url.searchParams.set(key, value);
     }
@@ -69,9 +57,7 @@ export class WebClient {
       if (this.debug) {
         console.debug(`[WebClient] Request failed: GET ${url.toString()}`, error);
       }
-      throw WebClientError.unknownError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
+      throw WebClientError.unknownError(error instanceof Error ? error : new Error(String(error)));
     }
 
     if (this.debug) {
@@ -101,14 +87,12 @@ export class WebClient {
   async sendPostRequest(
     path: string,
     queryItems: Record<string, string> = {},
-    formData: Record<string, string> = {},
+    formData: Record<string, string> = {}
   ): Promise<string> {
     const url = new URL(path, this.session.baseUrl);
 
     // Сортируем параметры по имени
-    const sortedParams = Object.entries(queryItems).sort(([a], [b]) =>
-      a.localeCompare(b),
-    );
+    const sortedParams = Object.entries(queryItems).sort(([a], [b]) => a.localeCompare(b));
     for (const [key, value] of sortedParams) {
       url.searchParams.set(key, value);
     }
@@ -142,9 +126,7 @@ export class WebClient {
       if (this.debug) {
         console.debug(`[WebClient] Request failed: POST ${url.toString()}`, error);
       }
-      throw WebClientError.unknownError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
+      throw WebClientError.unknownError(error instanceof Error ? error : new Error(String(error)));
     }
 
     if (this.debug) {
@@ -187,7 +169,7 @@ export class WebClient {
         "LoginForm[password]": password,
         dynpage: "1",
         yt0: "",
-      },
+      }
     );
 
     if (html.includes("Неверный E-mail или пароль.") || html.includes("Вход по паролю")) {
@@ -220,9 +202,7 @@ export class WebClient {
     }
 
     // Извлекаем аватар
-    const avatarSrc = $("content .card-image.hide-on-small-and-down img")
-      .first()
-      .attr("src");
+    const avatarSrc = $("content .card-image.hide-on-small-and-down img").first().attr("src");
     if (!avatarSrc) {
       throw WebClientError.couldNotParseHtml();
     }
@@ -244,10 +224,7 @@ export class WebClient {
 
     const html = await this.sendRequest("/", queryItems);
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -268,10 +245,7 @@ export class WebClient {
     return episodes;
   }
 
-  private parsePersonalEpisode(
-    $: cheerio.CheerioAPI,
-    element: Element,
-  ): NewPersonalEpisode | null {
+  private parsePersonalEpisode($: cheerio.CheerioAPI, element: Element): NewPersonalEpisode | null {
     const $el = $(element);
 
     // Извлекаем URL эпизода
@@ -295,7 +269,7 @@ export class WebClient {
     }
     const seriesPosterUrl = new URL(
       posterMatch[1].replace(".140x140.1", ""),
-      this.baseUrl,
+      this.baseUrl
     ).toString();
 
     // Извлекаем названия
@@ -338,10 +312,7 @@ export class WebClient {
       ajax: "m-index-recent-episodes",
     });
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -359,11 +330,7 @@ export class WebClient {
 
         $section.find("div.m-new-episode").each((_, episodeElement) => {
           try {
-            const episode = this.parseRecentEpisode(
-              $,
-              episodeElement,
-              sectionHeader,
-            );
+            const episode = this.parseRecentEpisode($, episodeElement, sectionHeader);
             if (episode) {
               episodes.push(episode);
             }
@@ -371,7 +338,7 @@ export class WebClient {
             // Skip invalid episodes
           }
         });
-      },
+      }
     );
 
     return episodes;
@@ -380,7 +347,7 @@ export class WebClient {
   private parseRecentEpisode(
     $: cheerio.CheerioAPI,
     element: Element,
-    sectionTitle: string,
+    sectionTitle: string
   ): NewRecentEpisode | null {
     const $el = $(element);
 
@@ -405,7 +372,7 @@ export class WebClient {
     }
     const seriesPosterUrl = new URL(
       posterMatch[1].replace(".140x140.1", ""),
-      this.baseUrl,
+      this.baseUrl
     ).toString();
 
     // Извлекаем названия
@@ -450,21 +417,15 @@ export class WebClient {
 
   // === Anime List ===
 
-  async getAnimeList(
-    userId: number,
-    category: AnimeListCategory,
-  ): Promise<AnimeListEntry[]> {
+  async getAnimeList(userId: number, category: AnimeListCategory): Promise<AnimeListEntry[]> {
     const html = await this.sendRequest(
       `/users/${userId}/list/${AnimeListCategoryWebPath[category]}`,
       {
         dynpage: "1",
-      },
+      }
     );
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -485,10 +446,7 @@ export class WebClient {
     return entries;
   }
 
-  private parseAnimeListEntry(
-    $: cheerio.CheerioAPI,
-    element: Element,
-  ): AnimeListEntry | null {
+  private parseAnimeListEntry($: cheerio.CheerioAPI, element: Element): AnimeListEntry | null {
     const $el = $(element);
 
     const seriesIdStr = $el.attr("data-id");
@@ -502,11 +460,7 @@ export class WebClient {
       return null;
     }
 
-    const episodesString = $el
-      .find('td[data-name="episodes"]')
-      .first()
-      .text()
-      .trim();
+    const episodesString = $el.find('td[data-name="episodes"]').first().text().trim();
     const episodesParts = episodesString.split(" / ");
     if (episodesParts.length !== 2) {
       return null;
@@ -531,17 +485,12 @@ export class WebClient {
     };
   }
 
-  async getAnimeListEditableEntry(
-    seriesId: number,
-  ): Promise<AnimeListEditableEntry> {
+  async getAnimeListEditableEntry(seriesId: number): Promise<AnimeListEditableEntry> {
     const html = await this.sendRequest(`/animelist/edit/${seriesId}`, {
       mode: "mini",
     });
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -556,17 +505,13 @@ export class WebClient {
 
     const $ = this.parseHtml(html);
 
-    const episodesWatchedStr = $("input#UsersRates_episodes")
-      .first()
-      .attr("value");
+    const episodesWatchedStr = $("input#UsersRates_episodes").first().attr("value");
     if (!episodesWatchedStr) {
       throw WebClientError.couldNotParseHtml();
     }
     const episodesWatched = Number.parseInt(episodesWatchedStr, 10);
 
-    const statusStr = $("select#UsersRates_status option[selected]")
-      .first()
-      .attr("value");
+    const statusStr = $("select#UsersRates_status option[selected]").first().attr("value");
     if (!statusStr) {
       throw WebClientError.couldNotParseHtml();
     }
@@ -576,9 +521,7 @@ export class WebClient {
       throw WebClientError.couldNotParseHtml();
     }
 
-    const scoreStr = $("#UsersRates_score option[selected]")
-      .first()
-      .attr("value");
+    const scoreStr = $("#UsersRates_score option[selected]").first().attr("value");
     const scoreInt = scoreStr ? Number.parseInt(scoreStr, 10) : 0;
     const score = scoreInt > 0 ? scoreInt : null;
 
@@ -597,7 +540,7 @@ export class WebClient {
     score: number,
     episodes: number,
     status: number,
-    comment: string,
+    comment: string
   ): Promise<void> {
     await this.sendPostRequest(
       `/animelist/edit/${seriesId}`,
@@ -607,26 +550,19 @@ export class WebClient {
         "UsersRates[episodes]": String(episodes),
         "UsersRates[status]": String(status),
         "UsersRates[comment]": comment,
-      },
+      }
     );
   }
 
   // === Mark Episode ===
 
   async markEpisodeAsWatched(translationId: number): Promise<void> {
-    await this.sendPostRequest(
-      `/translations/watched/${translationId}`,
-      {},
-      {},
-    );
+    await this.sendPostRequest(`/translations/watched/${translationId}`, {}, {});
   }
 
   // === Moments ===
 
-  async getMoments(
-    page: number,
-    sort?: MomentSorting,
-  ): Promise<MomentPreview[]> {
+  async getMoments(page: number, sort?: MomentSorting): Promise<MomentPreview[]> {
     const queryItems: Record<string, string> = {};
 
     if (page === 1) {
@@ -643,10 +579,7 @@ export class WebClient {
 
     const html = await this.sendRequest("/moments/index", queryItems);
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -667,10 +600,7 @@ export class WebClient {
     return moments;
   }
 
-  async getMomentsBySeries(
-    seriesId: number,
-    page: number,
-  ): Promise<MomentPreview[]> {
+  async getMomentsBySeries(seriesId: number, page: number): Promise<MomentPreview[]> {
     const queryItems: Record<string, string> = {};
 
     if (page === 1) {
@@ -681,15 +611,9 @@ export class WebClient {
       queryItems["moments-page"] = String(page);
     }
 
-    const html = await this.sendRequest(
-      `/moments/listBySeries/${seriesId}`,
-      queryItems,
-    );
+    const html = await this.sendRequest(`/moments/listBySeries/${seriesId}`, queryItems);
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -710,10 +634,7 @@ export class WebClient {
     return moments;
   }
 
-  private parseMomentPreview(
-    $: cheerio.CheerioAPI,
-    element: Element,
-  ): MomentPreview | null {
+  private parseMomentPreview($: cheerio.CheerioAPI, element: Element): MomentPreview | null {
     const $el = $(element);
 
     const momentTitle = $el.find(".m-moment__title a").first().text().trim();
@@ -721,31 +642,21 @@ export class WebClient {
       return null;
     }
 
-    const sourceDescription = $el
-      .find(".m-moment__episode")
-      .first()
-      .text()
-      .trim();
+    const sourceDescription = $el.find(".m-moment__episode").first().text().trim();
     if (!sourceDescription) {
       return null;
     }
 
-    const previewSrc = $el
-      .find(".m-moment__thumb.a img[src]")
-      .first()
-      .attr("src");
+    const previewSrc = $el.find(".m-moment__thumb.a img[src]").first().attr("src");
     if (!previewSrc) {
       return null;
     }
     const coverUrl = new URL(
       previewSrc.trim().replace(".320x180", ".1280x720").replace(/\?.+$/, ""),
-      this.baseUrl,
+      this.baseUrl
     ).toString();
 
-    const momentHref = $el
-      .find(".m-moment__title a[href]")
-      .first()
-      .attr("href");
+    const momentHref = $el.find(".m-moment__title a[href]").first().attr("href");
     if (!momentHref) {
       return null;
     }
@@ -755,11 +666,7 @@ export class WebClient {
     }
     const momentId = Number.parseInt(momentIdMatch[1], 10);
 
-    const durationString = $el
-      .find(".m-moment__duration")
-      .first()
-      .text()
-      .trim();
+    const durationString = $el.find(".m-moment__duration").first().text().trim();
     const durationSeconds = parseDurationString(durationString);
     if (durationSeconds === null) {
       return null;
@@ -777,10 +684,7 @@ export class WebClient {
   async getMomentDetails(momentId: number): Promise<MomentDetails> {
     const html = await this.sendRequest(`/moments/${momentId}`, {});
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 
@@ -814,10 +718,7 @@ export class WebClient {
   async getMomentEmbed(momentId: number): Promise<MomentEmbed> {
     const html = await this.sendRequest(`/moments/embed/${momentId}`, {});
 
-    if (
-      html.includes("Вход или регистрация") ||
-      html.includes("Вход - Anime 365")
-    ) {
+    if (html.includes("Вход или регистрация") || html.includes("Вход - Anime 365")) {
       throw WebClientError.authenticationRequired();
     }
 

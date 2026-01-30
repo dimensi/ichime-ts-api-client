@@ -29,10 +29,15 @@ export interface SeriesFullDescription {
 
 export interface SeriesFull {
   id: number;
+  aniDbId: number;
+  animeNewsNetworkId: number;
+  fansubsId: number;
+  imdbId: number;
+  worldArtId: number;
+  myAnimeListId: number;
   title: string;
   posterUrl: string | null;
   myAnimeListScore: string;
-  myAnimeListId: number;
   isAiring: number;
   numberOfEpisodes: number;
   season: string;
